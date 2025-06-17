@@ -1,3 +1,17 @@
+Intuito da aplicação -
+Se direcionar a quem provê serviços financeiros, fazendo um intermédio de entradas para uma saida CSV.
+
+Como usar -
+Aplicativo é bem intuitivo, cadastra-se o cliente, ao clicar no nome do mesmo abrirá as opções de colocar as dívidas, rendas extras e possíveis "projetos". Caso o valor da conta seja positivo ele dirá o valor que se ganha com o rendimento mensal da conta, caso o valor seja negativo mostrará as opções de empréstimo do banco de dados.
+
+Os empréstimos são colocados apenas via EndPoints.
+
+Database -
+A pasta Database contem o banco de dados (prevencao_dividas) em SQL, foi usado o MySQL como banco de dados.
+
+Integrante -
+Diogo Rafael Varela Butzke - 172316253
+
 ENDPOINTS DISPONÍVEIS - API Spring Boot
 
 CLIENTE (/clientes)
