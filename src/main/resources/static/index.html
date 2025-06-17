@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Prevenção de Dívidas</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="container py-4">
+  <h1 class="mb-4">Prevenção de Dívidas</h1>
+
+  <h3>Cadastro de Cliente</h3>
+  <form id="formCliente" class="mb-4">
+    <input class="form-control mb-2" type="text" placeholder="Nome" id="nome">
+    <input class="form-control mb-2" type="text" placeholder="CPF" id="cpf" maxlength="14" inputmode="numeric">
+    <input class="form-control mb-2" type="text" placeholder="Renda mensal" id="renda">
+    <button class="btn btn-primary" type="submit">Salvar Cliente</button>
+  </form>
+
+  <h4>Clientes</h4>
+  <ul id="listaClientes" class="list-group mb-4"></ul>
+
+  <div id="clienteSelecionado" class="d-none">
+    <h3 class="mt-4">Financeiro de <span id="nomeCliente"></span></h3>
+
+    <form id="formGasto" class="mb-3">
+      <h5>Adicionar Gasto</h5>
+      <input class="form-control mb-2" type="text" placeholder="Descrição do gasto" id="gastoDesc">
+      <input class="form-control mb-2" type="text" placeholder="Valor" id="gastoValor">
+      <button class="btn btn-danger" type="submit">Adicionar Gasto</button>
+    </form>
+
+    <form id="formReceita" class="mb-3">
+      <h5>Adicionar Receita Extra</h5>
+      <input class="form-control mb-2" type="text" placeholder="Descrição da receita" id="receitaDesc">
+      <input class="form-control mb-2" type="text" placeholder="Valor" id="receitaValor">
+      <button class="btn btn-success" type="submit">Adicionar Receita</button>
+    </form>
+
+    <form id="formMeta" class="mb-3">
+      <h5>Definir Meta</h5>
+      <input class="form-control mb-2" type="text" placeholder="Descrição da meta" id="metaDesc">
+      <input class="form-control mb-2" type="text" placeholder="Valor desejado" id="metaValor">
+      <button class="btn btn-info" type="submit">Salvar Meta</button>
+    </form>
+
+    <h5 class="mt-4">Resumo Financeiro</h5>
+    <ul class="list-group mb-2">
+      <li class="list-group-item">Renda Base: R$ <span id="rendaBase"></span></li>
+      <li class="list-group-item">Receitas Extras: R$ <span id="totalReceita"></span></li>
+      <li class="list-group-item">Gastos: R$ <span id="totalGastos"></span></li>
+      <li class="list-group-item fw-bold">Saldo Final: R$ <span id="saldoFinal"></span></li>
+    </ul>
+
+    <div id="sugestao" class="alert d-none"></div>
+
+    <h5 class="mt-4">Gastos Registrados</h5>
+    <ul id="listaGastos" class="list-group mb-3"></ul>
+
+    <h5>Receitas Extras</h5>
+    <ul id="listaReceitas" class="list-group mb-3"></ul>
+
+    <h5>Metas</h5>
+    <ul id="listaMetas" class="list-group mb-3"></ul>
+  </div>
+
+  <script>
+	function formatarValorBR(valor) {
+	  return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+	}
+
+	function limparValor(v) {
+	  return parseFloat(v.replace(',', '.').replace(/[^\d.-]/g, '')) || 0;
+	}
+
+	document.getElementById('cpf').addEventListener('input', function () {
+	  let v = this.value.replace(/\D/g, '').slice(0, 11);
+	  this.value = v
+	    .replace(/(\d{3})(\d)/, '$1.$2')
+	    .replace(/(\d{3})(\d)/, '$1.$2')
+	    .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+	});
+
+	['renda', 'gastoValor', 'receitaValor', 'metaValor'].forEach(id => {
+	  const el = document.getElementById(id);
+	  el.addEventListener('input', () => {
+	    let val = el.value.replace(',', '.').replace(/[^\d.]/g, '');
+	    if (val.includes('.')) {
+	      let [int, dec] = val.split('.');
+	      dec = dec.slice(0, 2);
+	      val = int + '.' + dec;
+	    }
+	    el.dataset.raw = val;
+	  });
+	});
+  </script>
+<script>
+const api = 'http://localhost:8080';
+let clienteAtual = null;
+
+async function carregarClientes() {
+  const res = await fetch(`${api}/clientes`);
+  const clientes = await res.json();
+  const lista = document.getElementById('listaClientes');
+  lista.innerHTML = '';
+  clientes.forEach(c => {
+    const li = document.createElement('li');
+    li.className = 'list-group-item list-group-item-action';
+    li.textContent = `${c.nome} - CPF: ${c.cpf}`;
+    li.onclick = () => selecionarCliente(c);
+    lista.appendChild(li);
+  });
+}
+
+async function selecionarCliente(c) {
+  clienteAtual = c;
+  document.getElementById('clienteSelecionado').classList.remove('d-none');
+  document.getElementById('nomeCliente').textContent = c.nome;
+  document.getElementById('rendaBase').textContent = c.rendaMensal.toFixed(2);
+
+  const gastos = await (await fetch(`${api}/gastos/cliente/${c.id}`)).json();
+  const receitas = await (await fetch(`${api}/receitas/cliente/${c.id}`)).json();
+  const metas = await (await fetch(`${api}/metas/cliente/${c.id}`)).json();
+  const emprestimos = await (await fetch(`${api}/emprestimos`)).json();
+
+  const totalGastos = gastos.reduce((acc, g) => acc + g.valor, 0);
+  const totalReceitas = receitas.reduce((acc, r) => acc + r.valor, 0);
+  const saldo = c.rendaMensal + totalReceitas - totalGastos;
+
+  document.getElementById('totalGastos').textContent = totalGastos.toFixed(2);
+  document.getElementById('totalReceita').textContent = totalReceitas.toFixed(2);
+  document.getElementById('saldoFinal').textContent = saldo.toFixed(2);
+
+  const sugestao = document.getElementById('sugestao');
+  if (saldo >= 0) {
+    sugestao.className = 'alert alert-success';
+    sugestao.classList.remove('d-none');
+    const rendimento = (saldo * 0.005).toFixed(2);
+    sugestao.textContent = `Você pode guardar R$${saldo.toFixed(2)}. Com rendimento de 0,5% ao mês, renderia cerca de R$${rendimento}.`;
+  } else {
+    sugestao.className = 'alert alert-warning';
+    sugestao.classList.remove('d-none');
+	sugestao.innerHTML = '<strong>Saldo negativo!</strong> Opções de empréstimo:<ul>' + 
+	  emprestimos.map(e => {
+	    const jurosTotais = e.valorEmprestado * (e.taxaJuros / 100) * e.parcelas;
+	    const valorFinal = e.valorEmprestado + jurosTotais;
+	    const parcela = valorFinal / e.parcelas;
+
+	    return `<li>${e.banco}: Empréstimo de R$${e.valorEmprestado.toFixed(2)} — Total a pagar: R$${valorFinal.toFixed(2)} em ${e.parcelas}x de R$${parcela.toFixed(2)} (juros totais: R$${jurosTotais.toFixed(2)})</li>`;
+	  }).join('') + '</ul>';
+  }
+
+  preencherLista('listaGastos', gastos, g => `${g.descricao}: R$${g.valor.toFixed(2)}`, deletarGasto);
+  preencherLista('listaReceitas', receitas, r => `${r.descricao}: R$${r.valor.toFixed(2)}`, deletarReceita);
+  preencherLista('listaMetas', metas, m => `${m.descricao} (meta: R$${m.valorAlvo.toFixed(2)})`, deletarMeta);
+}
+
+async function deletarGasto(id) {
+  await fetch(`${api}/gastos/${id}`, { method: 'DELETE' });
+  selecionarCliente(clienteAtual);
+}
+
+async function deletarReceita(id) {
+  await fetch(`${api}/receitas/${id}`, { method: 'DELETE' });
+  selecionarCliente(clienteAtual);
+}
+
+async function deletarMeta(id) {
+  await fetch(`${api}/metas/${id}`, { method: 'DELETE' });
+  selecionarCliente(clienteAtual);
+}
+
+function preencherLista(id, dados, formatador, deletarFunc) {
+  const ul = document.getElementById(id);
+  ul.innerHTML = '';
+  dados.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'list-group-item d-flex justify-content-between align-items-center';
+    li.innerHTML = `
+      <span>${formatador(item)}</span>
+      <button class="btn btn-sm btn-outline-danger" onclick="${deletarFunc.name}(${item.id})">Excluir</button>
+    `;
+    ul.appendChild(li);
+  });
+}
+
+document.getElementById('formCliente').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const nome = document.getElementById('nome').value;
+  const cpf = document.getElementById('cpf').value;
+  const renda = parseFloat(document.getElementById('renda').dataset.raw || '0');
+  await fetch(`${api}/clientes`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ nome, cpf, rendaMensal: renda })
+  });
+  carregarClientes();
+});
+
+['formGasto', 'formReceita', 'formMeta'].forEach(id => {
+  document.getElementById(id).addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!clienteAtual) return;
+    if (id === 'formGasto') {
+      await fetch(`${api}/gastos`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao: gastoDesc.value, valor: parseFloat(gastoValor.value), cliente: { id: clienteAtual.id } })
+      });
+    } else if (id === 'formReceita') {
+      await fetch(`${api}/receitas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao: receitaDesc.value, valor: parseFloat(receitaValor.value), cliente: { id: clienteAtual.id } })
+      });
+    } else if (id === 'formMeta') {
+      await fetch(`${api}/metas`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao: metaDesc.value, valorAlvo: parseFloat(metaValor.value), cliente: { id: clienteAtual.id } })
+      });
+    }
+    selecionarCliente(clienteAtual);
+  });
+});
+
+carregarClientes();
+</script>
+</body>
+</html>
